@@ -1,0 +1,486 @@
+{
+  "name": "Job Application Email sorter",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "q": "category:primary -label:Applied -label:Interview -label:Assessment -label:Rejected -label:Offer -label:Other"
+        }
+      },
+      "id": "2e7ce5f3-007b-4f3b-8dd3-4875e0ec378e",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        480
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "8Yc7wmZJlJSdT6nd",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => ({\n     json: {\n       id: item.json.id,\n       subject: item.json.payload?.headers?.find(h => h.name === 'Subject')?.value || item.json.subject || '',\n       from: item.json.payload?.headers?.find(h => h.name === 'From')?.value || item.json.from || '',\n       snippet: item.json.snippet || ''\n     }\n   }));\n"
+      },
+      "id": "5ea3b1d9-1040-4010-b704-5f300e46436f",
+      "name": "Extract Email Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n       \"contents\": [{\n         \"parts\": [{\n           \"text\": \"You are sorting job-application-related emails into exactly one category.\\n\\nCategories:\\n- Applied: confirmation that an application was submitted/received\\n- Interview: invitation to schedule or attend an interview\\n- Assessment: online test, coding challenge, take-home task, or skills assessment request\\n- Rejected: rejection / moving forward with other candidates / not selected\\n- Offer: job offer email\\n- Other: anything not clearly job-application related (newsletters, LinkedIn digests, etc.)\\n\\nEmail Subject: {{ $json.subject }}\\nFrom: {{ $json.from }}\\nSnippet: {{ $json.snippet }}\\n\\nRespond with ONLY valid JSON, no markdown, no explanation:\\n{\\\"category\\\": \\\"one of: Applied, Interview, Assessment, Rejected, Offer, Other\\\", \\\"confidence\\\": \\\"high/medium/low\\\"}\"\n         }]\n       }]\n     }",
+        "options": {}
+      },
+      "id": "04abd9d5-b20e-41b2-95d5-74682eb0d507",
+      "name": "Call Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        480
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "KZgcQjIuL3pDOGS6",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((item, i) => {\n  const raw = item.json.candidates[0].content.parts[0].text;\n  const cleaned = raw.replace(/```json|```/g, '').trim();\n  let parsed;\n  try {\n    parsed = JSON.parse(cleaned);\n  } catch (e) {\n    parsed = { category: 'Other', confidence: 'low' };\n  }\n  const source = $('Extract Email Fields').all()[i].json;\n  return { json: { ...source, category: parsed.category, confidence: parsed.confidence } };\n});"
+      },
+      "id": "efc1393a-448a-4a0b-8942-dbd815fb1a4a",
+      "name": "Parse Gemini Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Applied",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "a995ed2a-23e5-4bba-9a48-1598ad73a437"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "2b61c326-c8c1-43d3-b3d5-877baffb2b2a",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Interview",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7c2c6adc-bceb-4d9d-a547-a9124e9c6021",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Assessment",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "6d756823-69e8-4743-9b98-98c70e0aef73",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Rejected",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "0c469c2e-580e-454c-8061-1970e9715339",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Offer",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f2125d65-8638-4d6d-9a89-021a79bd2f47",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Other",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dd7d8b23-38e3-4317-9cc2-56c28afbacb2",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.id }}",
+        "labelIds": [
+          "Label_7245908206703557004"
+        ]
+      },
+      "id": "030fc70a-5b42-42b0-8ca5-2371073d7d21",
+      "name": "Applied",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        0
+      ],
+      "webhookId": "29a9c87b-00a4-43b3-878d-2bf16191d3cb",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "8Yc7wmZJlJSdT6nd",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.id }}",
+        "labelIds": [
+          "Label_3184320119258489293"
+        ]
+      },
+      "id": "bee342b9-5537-4eb7-ab98-ba4be4cb41e0",
+      "name": "Interview",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        192
+      ],
+      "webhookId": "a6ff91ca-aa41-4a33-a4b4-6b0f54acebd9",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "8Yc7wmZJlJSdT6nd",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.id }}",
+        "labelIds": [
+          "Label_1671712389182332681"
+        ]
+      },
+      "id": "ccdddc1e-ac01-4f76-bcb1-c166243dd1c5",
+      "name": "Assessment",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        384
+      ],
+      "webhookId": "dde5627c-6d30-4651-9c33-8f3f45bfcb23",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "8Yc7wmZJlJSdT6nd",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.id }}",
+        "labelIds": [
+          "Label_1135095385881401536"
+        ]
+      },
+      "id": "09c3638d-be22-4cb7-a0b9-5270aa8f4956",
+      "name": "Rejection",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        576
+      ],
+      "webhookId": "60bdd5b6-5f75-44f4-868d-203c3c2e8a60",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "8Yc7wmZJlJSdT6nd",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.id }}",
+        "labelIds": [
+          "Label_5243346526134597416"
+        ]
+      },
+      "id": "133c9997-bcc0-4e3d-8063-14d15880aedf",
+      "name": "Acceptance",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        768
+      ],
+      "webhookId": "6232033a-d7b0-4da3-819c-61a102873d45",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "8Yc7wmZJlJSdT6nd",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.id }}",
+        "labelIds": [
+          "Label_5111345995763764508"
+        ]
+      },
+      "id": "8bca0add-ed18-46da-ab7b-56fa826266ad",
+      "name": "Other",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        960
+      ],
+      "webhookId": "b24652b0-ad06-4526-9146-6c227670b657",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "8Yc7wmZJlJSdT6nd",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Email Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Email Fields": {
+      "main": [
+        [
+          {
+            "node": "Call Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Gemini": {
+      "main": [
+        [
+          {
+            "node": "Parse Gemini Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gemini Response": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Applied",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Interview",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assessment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Acceptance",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Other",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "4d291566-67f7-410a-baa0-93ebdf4c6296",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e26ef54ef0fe8e8c54a51887068372130d3b1a02fdffb64a4f25cb9e9d7ca46a"
+  },
+  "nodeGroups": [],
+  "id": "9RVrM0r3J0NQcYAo",
+  "tags": []
+}
